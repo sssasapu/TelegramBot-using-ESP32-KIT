@@ -1,0 +1,236 @@
+#include <WiFiClientSecure.h>
+#include <UniversalTelegramBot.h>   
+#include <ArduinoJson.h>
+#include <WiFi.h>
+#include "HTTPClient.h"
+#include "time.h"
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 19800;
+const int   daylightOffset_sec = 0;
+
+const char* ssid = "AndroidAPCB34";
+const char* password = "byrf5189";
+
+#define BOT_ID "5961295166:AAHxj8qc4vJvIlVMB2ZDIQ_FA82778rOSXI"  
+#define CHAT_ID "1490481782"  //replace with your telegram user ID
+
+int bal = 15000;
+String GOOGLE_SCRIPT_ID  = "AKfycbwBfrsWp7Z5MRmKok2vPnVY1_NcdZam-UWbzZTskBGq5hJ5nN6a9xopCDGuS_wqznGW";
+
+WiFiClientSecure client;
+UniversalTelegramBot bot(BOT_ID, client);
+
+int bot_del = 1000;
+unsigned long last_t_Bot;
+
+const int ledPin = 2;
+bool led_St = LOW;
+
+
+// Handling the new messages
+void handleNewMessages(int New_messages) {
+     Serial.println("Handling New Message");
+  Serial.println(String(New_messages));
+
+  for (int i=0; i<New_messages; i++) {
+    // Chat id of the requester
+    String chat_id = String(bot.messages[i].chat_id);
+    if (chat_id != CHAT_ID){
+      bot.sendMessage(chat_id, "Unauthorized user", "");
+      continue;
+    }
+    int num;
+    HTTPClient http;
+      String url="https://script.google.com/macros/s/AKfycbyiX514WiL5tOWLeAQxKKFe0YSUUwtqA4qiYQY6LGx1VtQuAMfsSJmQqSAHHnumj89z/exec?read";
+      Serial.println("making a request");
+      http.begin(url.c_str());
+      http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+      int httpCode=http.GET();
+      String User_name;
+      if(httpCode>0){
+        User_name = http.getString();
+        Serial.println(httpCode);
+        Serial.println(User_name);
+      }
+      else{
+        Serial.println("error");
+
+      }
+
+      String url2="https://script.google.com/macros/s/AKfycbyWy6bH4hXmDqVqKoDbbYUsovmXNtu0uymCOrkrwT6OK90hoAfxCuO6QOslkDWasfCP/exec?read";
+      
+      http.begin(url2.c_str());
+      http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+      int httpCode2=http.GET();
+      String Password;
+      if(httpCode2>0){
+        Password=http.getString();
+        Serial.println(httpCode2);
+        Serial.println(Password);
+      }
+      else{
+        Serial.println("error");
+
+      }
+  
+    int pass=0;
+
+    // Print the received message
+    String user_text = bot.messages[i].text;
+    Serial.println(user_text);
+
+    String your_name = bot.messages[i].from_name;
+    if (user_text == "/start") {
+      String welcome = "Welcome, " + your_name + " Please Enter your username.\n";
+      bot.sendMessage(chat_id, welcome, "");
+    }
+    if(user_text == User_name){
+      pass=pass++;
+      bot.sendMessage(chat_id,"Enter your password","");
+      void handle_transactions();
+      
+    }
+    int a;
+
+    if(user_text==Password){
+      
+       pass=pass++;
+       if(pass=2){
+           bot.sendMessage(chat_id,"Login succesful, enter /Transaction to make any transaction","");
+           a=2;
+       }
+       pass=0;
+    }
+
+  
+    if (a==2 && user_text=="/Transaction") {
+      String welcome = "Welcome, " + your_name + ".\n";
+      welcome += "Send /credit to request amount to be credited \n";
+      welcome += "Send /debit to request amount to be debited \n";
+      welcome += "Send /chk_bal to request for the balance amount \n";
+      bot.sendMessage(chat_id, welcome, "");
+    }
+  
+    if (user_text == "/debit") {
+      led_St = HIGH;
+      digitalWrite(ledPin, led_St);
+      Serial.println("Enter denominations: ");
+      delay(3000);
+      while(Serial.available() == 0){
+      }
+      int count = Serial.read();
+      Serial.write(count);
+      debit_amt(count);
+    }
+    
+    if (user_text == "/credit") {
+      led_St = HIGH;
+      digitalWrite(ledPin, led_St);
+      Serial.println("Enter denominations: ");
+      delay(3000);
+      while(Serial.available() == 0){
+      }
+      int count = Serial.read();
+      Serial.write(count);
+      credit_amt(count);
+    }
+
+    if(user_text == "/chk_bal")
+    {
+      led_St = HIGH;
+      digitalWrite(ledPin, led_St);
+      Serial.println("The balance amount is:");
+      Serial.println(bal);
+    }
+  }
+}
+
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, led_St);
+  
+  // Connect to Wi-Fi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  
+  client.setCACert(TELEGRAM_CERTIFICATE_ROOT); // Add root certificate for api.telegram.org
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(3000);
+    Serial.println("Connecting to WiFi..");
+  }
+  // Print ESP32 Local IP Address
+  Serial.println(WiFi.localIP());
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+}
+
+void loop() {
+  if (millis() > last_t_Bot + bot_del)  {
+    int New_messages = bot.getUpdates(bot.last_message_received + 1);
+
+    while(New_messages) {
+      Serial.println("\nGot Response!");
+      handleNewMessages(New_messages);
+      New_messages = bot.getUpdates(bot.last_message_received + 1);
+    }
+    last_t_Bot = millis();
+  }
+}
+
+void debit_amt(int num){
+  String D = "Debit";
+  int amt = num * 100;
+  bal += amt;
+  Serial.print("The amount has been debited.");
+  sheet_update(amt, 0, bal,D);
+}
+
+void credit_amt(int amount){
+  String C = "Credit";
+  int amt = amount * 100;
+  if(amt > bal){
+    Serial.println("Insufficient Balance.");
+    exit(0);
+  }
+  else{
+  bal -= amount;
+  Serial.print("\nThe amount has been credited.");
+  }
+  sheet_update(0, amt, bal, C);
+}
+
+void bal_check(){
+  Serial.println("\nYour current balance is.. Rs.");
+  Serial.println(bal);
+}
+
+void sheet_update(int amt1, int amt2, int amt3, String Type) {
+if (WiFi.status() == WL_CONNECTED) {
+  static bool flag = false;
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo)) {
+      Serial.println("Failed to obtain time");
+      return;
+    }
+    char timeStringBuff[50]; //50 chars should be enough
+    strftime(timeStringBuff, sizeof(timeStringBuff), "%A, %B %d %Y %H:%M:%S", &timeinfo);
+    String asString(timeStringBuff);
+    asString.replace(" ", " - ");
+    Serial.print("Time:");
+    Serial.println(asString);
+String urlFinal = "https://script.google.com/macros/s/"+GOOGLE_SCRIPT_ID+"/exec?"+"Debit=" + String(amt1) + "&Credit=" + String(amt2) + "&Total_balance=" + String(amt3)  + "&Type_of_transaction=" + Type + "&Date=" + asString;
+Serial.print ("POST data to spreadsheet:");
+Serial.println (urlFinal);
+HTTPClient http;
+http.begin (urlFinal.c_str());
+http.setFollowRedirects (HTTPC_STRICT_FOLLOW_REDIRECTS);
+int httpCode = http.GET();
+Serial.print ("HTTP Status Code: ");
+Serial.println (httpCode);
+http.end();
+}
+delay(1000);
+}
